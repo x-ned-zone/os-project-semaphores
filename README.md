@@ -12,6 +12,6 @@ How to run:
 
 2. run simulation (from bin folder)
 
-   java -cp bin Simulation "input-file.txt"
+   java -cp bin Simulator "input-file.txt"
 
 
