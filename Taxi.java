@@ -47,6 +47,11 @@ public class Taxi extends Thread
     private final int REQUEST= 2;
     private final int DEPART = 3;
     private final int ARRIVE = 4;
+    private final int PICKUP = 5;
+    private final int DISEMBARK = 6;
+
+    private int thisBranchrequests = 0;
+    private int thisBranchPicked = 0;
 
     public Taxi (int numberOfBranches) {
         this.numberOfBranches = numberOfBranches;
@@ -75,7 +80,7 @@ public class Taxi extends Thread
                     discharge();
                     moveToNextBranch();
 
-                    simulateClock( 33/60 );  // tick 1 second in the clock
+                    // tick 1 second in the clock
                     sleep( 33); // wait
                 }
             }
@@ -106,6 +111,8 @@ public class Taxi extends Thread
                         person_i.setState(Person.PersonState.PICKEDUP);
                         pickedUpQueue.add(person_i);
                         hailQueue.remove(person_i);
+                        TRACE(PICKUP,person_i);
+                        thisBranchPicked++;
                     }
                 }
                 sem_taxiQueues.release();
@@ -136,10 +143,10 @@ public class Taxi extends Thread
                         // remove people with destinationBranch == currentBranch
                         if ( (destineBranch==currentBranch) && (pPerson.getPersonState()==Person.PersonState.TRAVELING))
                         {
-                            pPerson.dischargePerson(waitDuration);
-                            pickedUpQueue.poll();
+                            pPerson.dischargePerson(waitDuration/33);
+                            pickedUpQueue.remove(pPicked);
                             requestQueue.remove(pPerson.getID());
-                            //System.out.println("GetOut ("+pPerson+")");
+                            TRACE(DISEMBARK,pPerson);
                         }
                     }
                 }
@@ -164,7 +171,8 @@ public class Taxi extends Thread
         this.lastBranch = numberOfBranches-1;
 
         mutexLock.lock();
-        if ( (!hailQueue.isEmpty()) || ( !requestQueue.isEmpty()  && (taxiState == TaxiState.READY) ) )
+        if ( (thisBranchrequests==thisBranchPicked) &&
+           ( (!hailQueue.isEmpty()) || (!requestQueue.isEmpty() && (taxiState == TaxiState.READY)) ) )
         {
             this.waitTime(travelingTime);
             TRACE(DEPART);
@@ -199,8 +207,9 @@ public class Taxi extends Thread
                 if ( pPerson.getPersonState()== Person.PersonState.REQUESTED )
                     pPerson.moveWithTaxi(currentBranch);
             }
-
-            TRACE (ARRIVE);
+            TRACE(ARRIVE);
+            thisBranchrequests=0;
+            thisBranchPicked=0;
             taxiState = TaxiState.WAITING;
         }
         else {
@@ -234,6 +243,7 @@ public class Taxi extends Thread
                 TRACE(REQUEST, person);
                 requestQueue.put(person.getID(), person);
                 person.setState(Person.PersonState.REQUESTED);
+                thisBranchrequests++;
                 sem_taxiQueues.release();
                 sem_Taxi.release();
             }
@@ -262,11 +272,8 @@ public class Taxi extends Thread
      */
     public void waitTime(long time)
     {
-        currentTime +=33;
         try { sleep (time ); }
         catch (InterruptedException e) { e.printStackTrace(); }
-        //try { wait(time ); }
-        //catch (Exception e) { e.printStackTrace(); }
     }
 
     /**
@@ -296,6 +303,13 @@ public class Taxi extends Thread
             case ARRIVE:
                 event = String.format("%s branch %d : taxi arrive ", simulateClock(currentTime), currentBranch );
                 break;
+            case PICKUP:
+                event = String.format("%s branch %d : PICKEDUP person %d", simulateClock(currentTime), currentBranch, ((Person)varargs[0]).getID() );
+                break;
+            case DISEMBARK:
+                event = String.format("%s branch %d : DISEMBARK person %d", simulateClock(currentTime), currentBranch, ((Person)varargs[0]).getID() );
+                break;
+
             default:
                 event = "ERROR UNKNOWN EVENT!";
         }
